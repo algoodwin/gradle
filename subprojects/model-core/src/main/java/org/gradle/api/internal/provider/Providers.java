@@ -77,8 +77,8 @@ public class Providers {
         }
     }
 
-    public static IllegalStateException nullValue(Describable owner) {
-        return new IllegalStateException(String.format("No value has been specified for %s.", owner.getDisplayName()));
+    public static MissingValueException nullValue(Describable owner) {
+        return new MissingValueException(String.format("No value has been specified for %s.", owner.getDisplayName()));
     }
 
     public static class FixedValueProvider<T> extends AbstractProviderWithValue<T> implements ScalarSupplier<T> {

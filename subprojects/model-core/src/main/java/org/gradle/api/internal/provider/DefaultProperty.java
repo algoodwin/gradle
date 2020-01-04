@@ -18,6 +18,7 @@ package org.gradle.api.internal.provider;
 
 import org.gradle.api.provider.Property;
 import org.gradle.api.provider.Provider;
+import org.gradle.internal.DisplayName;
 
 import javax.annotation.Nullable;
 
@@ -153,7 +154,21 @@ public class DefaultProperty<T> extends AbstractProperty<T> implements Property<
     @Override
     public T get() {
         beforeRead();
-        return value.get(getDisplayName());
+        try {
+            return value.get(getDisplayName());
+        } catch (MissingValueException e) {
+            throw new MissingValueException(String.format("Cannot query the value of %s because it has no value.", getDisplayName()), e);
+        }
+    }
+
+    @Override
+    public T get(DisplayName owner) throws IllegalStateException {
+        beforeRead();
+        try {
+            return value.get(getDisplayName());
+        } catch (MissingValueException e) {
+            throw new MissingValueException(String.format("%s has no value.", getDisplayName().getCapitalizedDisplayName()), e);
+        }
     }
 
     @Override
