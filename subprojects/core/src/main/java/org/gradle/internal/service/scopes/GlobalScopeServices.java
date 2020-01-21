@@ -109,13 +109,13 @@ import org.gradle.process.internal.health.memory.DefaultOsMemoryInfo;
 import org.gradle.process.internal.health.memory.JvmMemoryInfo;
 import org.gradle.process.internal.health.memory.MemoryManager;
 import org.gradle.process.internal.health.memory.OsMemoryInfo;
-import org.gradle.util.DeprecationLogger;
+import org.gradle.internal.deprecation.DeprecationLogger;
 
 import java.util.List;
 
 /**
  * Defines the extended global services of a given process. This includes the CLI, daemon and tooling API provider. The CLI
- * only needs these advances services if it is running in --no-daemon mode.
+ * only needs these services if it is running in --no-daemon mode.
  */
 public class GlobalScopeServices extends WorkerSharedGlobalScopeServices {
 
@@ -318,6 +318,6 @@ public class GlobalScopeServices extends WorkerSharedGlobalScopeServices {
     }
 
     ValidateStep.ValidationWarningReporter createValidationWarningReporter() {
-        return DeprecationLogger::nagUserOfDeprecatedBehaviour;
+        return behaviour -> DeprecationLogger.deprecateBehaviour(behaviour).nagUser();
     }
 }

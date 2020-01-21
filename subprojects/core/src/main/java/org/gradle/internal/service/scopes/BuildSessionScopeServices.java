@@ -48,7 +48,7 @@ import org.gradle.initialization.layout.ProjectCacheDir;
 import org.gradle.internal.buildevents.BuildStartedTime;
 import org.gradle.internal.classpath.ClassPath;
 import org.gradle.internal.event.ListenerManager;
-import org.gradle.internal.featurelifecycle.DeprecatedUsageBuildOperationProgressBroadaster;
+import org.gradle.internal.featurelifecycle.DeprecatedUsageBuildOperationProgressBroadcaster;
 import org.gradle.internal.file.Deleter;
 import org.gradle.internal.filewatch.PendingChangesManager;
 import org.gradle.internal.hash.ChecksumService;
@@ -117,13 +117,16 @@ public class BuildSessionScopeServices extends DefaultServiceRegistry {
         return new BuildOperationCrossProjectConfigurator(buildOperationExecutor);
     }
 
+    BuildLayout createBuildLayout(BuildLayoutFactory buildLayoutFactory, StartParameter startParameter) {
+        return buildLayoutFactory.getLayoutFor(new BuildLayoutConfiguration(startParameter));
+    }
+
     ProjectCacheDir createCacheLayout(
-        BuildLayoutFactory buildLayoutFactory,
+        BuildLayout buildLayout,
         Deleter deleter,
         ProgressLoggerFactory progressLoggerFactory,
         StartParameter startParameter
     ) {
-        BuildLayout buildLayout = buildLayoutFactory.getLayoutFor(new BuildLayoutConfiguration(startParameter));
         File cacheDir = startParameter.getProjectCacheDir() != null ? startParameter.getProjectCacheDir() : new File(buildLayout.getRootDirectory(), ".gradle");
         return new ProjectCacheDir(cacheDir, progressLoggerFactory, deleter);
     }
@@ -172,12 +175,12 @@ public class BuildSessionScopeServices extends DefaultServiceRegistry {
         return execFactory.forContext(fileResolver, fileCollectionFactory, instantiator, buildCancellationToken, objectFactory);
     }
 
-    DeprecatedUsageBuildOperationProgressBroadaster createDeprecatedUsageBuildOperationProgressBroadaster(
+    DeprecatedUsageBuildOperationProgressBroadcaster createDeprecatedUsageBuildOperationProgressBroadcaster(
         Clock clock,
         BuildOperationListenerManager buildOperationListenerManager,
         CurrentBuildOperationRef currentBuildOperationRef
     ) {
-        return new DeprecatedUsageBuildOperationProgressBroadaster(
+        return new DeprecatedUsageBuildOperationProgressBroadcaster(
             clock,
             buildOperationListenerManager.getBroadcaster(),
             currentBuildOperationRef

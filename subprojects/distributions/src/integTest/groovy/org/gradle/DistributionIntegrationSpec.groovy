@@ -16,6 +16,7 @@
 
 package org.gradle
 
+
 import org.apache.commons.io.IOUtils
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
 import org.gradle.test.fixtures.archive.JarTestFixture
@@ -35,6 +36,8 @@ import static org.junit.Assert.assertThat
 
 abstract class DistributionIntegrationSpec extends AbstractIntegrationSpec {
 
+    protected static final THIRD_PARTY_LIB_COUNT = 186
+
     @Rule public final PreconditionVerifier preconditionVerifier = new PreconditionVerifier()
 
     @Shared String baseVersion = GradleVersion.current().baseVersion.version
@@ -42,17 +45,17 @@ abstract class DistributionIntegrationSpec extends AbstractIntegrationSpec {
     abstract String getDistributionLabel()
 
     /**
-     * Change this whenever you add or remove a new subproject.
+     * Change this whenever you add or remove subprojects.
      */
     int getCoreLibJarsCount() {
-        32
+        33
     }
 
     /**
      * Change this if you added or removed dependencies.
      */
     int getThirdPartyLibJarsCount() {
-        185
+        THIRD_PARTY_LIB_COUNT
     }
 
     int getLibJarsCount() {
@@ -199,4 +202,5 @@ abstract class DistributionIntegrationSpec extends AbstractIntegrationSpec {
             assert apiDeclaration.getProperty("excludes").split(":").size() == 1
         }
     }
+
 }

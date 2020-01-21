@@ -16,6 +16,7 @@
 
 package org.gradle.instantexecution
 
+import org.gradle.api.internal.project.ProjectStateRegistry
 import org.gradle.api.internal.provider.DefaultValueSourceProviderFactory
 import org.gradle.api.internal.provider.ValueSourceProviderFactory
 import org.gradle.api.internal.provider.sources.SystemPropertyValueSource
@@ -36,6 +37,7 @@ import org.gradle.instantexecution.serialization.beans.BeanConstructors
 import org.gradle.instantexecution.serialization.codecs.Codecs
 import org.gradle.instantexecution.serialization.codecs.WorkNodeCodec
 import org.gradle.instantexecution.serialization.readCollection
+import org.gradle.instantexecution.serialization.readNonNull
 import org.gradle.instantexecution.serialization.withIsolate
 import org.gradle.instantexecution.serialization.writeCollection
 import org.gradle.internal.build.event.BuildEventListenerRegistryInternal
@@ -147,8 +149,10 @@ class DefaultInstantExecution internal constructor(
 
                 instantExecutionStateFile.createParentDirectories()
 
-                withWriteContextFor(instantExecutionStateFile, report) {
-                    encodeScheduledWork()
+                service<ProjectStateRegistry>().withLenientState {
+                    withWriteContextFor(instantExecutionStateFile, report) {
+                        encodeScheduledWork()
+                    }
                 }
                 withWriteContextFor(instantExecutionFingerprintFile, report) {
                     encodeFingerprint()
@@ -202,7 +206,6 @@ class DefaultInstantExecution internal constructor(
 
         readRelevantProjects(build)
 
-        build.autoApplyPlugins()
         build.registerProjects()
 
         initProjectProvider(build::getProject)
@@ -235,7 +238,7 @@ class DefaultInstantExecution internal constructor(
     private
     suspend fun DefaultReadContext.checkFingerprintOfInputFiles(): InvalidationReason? {
         readCollection {
-            val (inputFile, hashCode) = read()!!.uncheckedCast<InstantExecutionCacheInputs.InputFile>()
+            val (inputFile, hashCode) = readNonNull<InstantExecutionCacheInputs.InputFile>()
             if (hashCodeOf(inputFile) != hashCode) {
                 // TODO: log some debug info
                 return "a configuration file has changed"
@@ -247,7 +250,7 @@ class DefaultInstantExecution internal constructor(
     private
     suspend fun DefaultReadContext.checkFingerprintOfObtainedValues(): InvalidationReason? {
         readCollection {
-            val obtainedValue = readObtainedValue()
+            val obtainedValue = readNonNull<ObtainedValue>()
             checkFingerprintValueIsUpToDate(obtainedValue)?.let { reason ->
                 return reason
             }
@@ -257,10 +260,6 @@ class DefaultInstantExecution internal constructor(
 
     private
     fun hashCodeOf(inputFile: File) = virtualFileSystem.hashCodeOf(inputFile)
-
-    private
-    suspend fun DefaultReadContext.readObtainedValue(): ObtainedValue =
-        read()!!.uncheckedCast()
 
     private
     fun checkFingerprintValueIsUpToDate(obtainedValue: ObtainedValue): InvalidationReason? = obtainedValue.run {
@@ -393,7 +392,6 @@ class DefaultInstantExecution internal constructor(
             classLoaderHierarchyHasher = service(),
             isolatableFactory = service(),
             valueSnapshotter = service(),
-            fileCollectionFingerprinterRegistry = service(),
             buildServiceRegistry = service(),
             managedFactoryRegistry = service(),
             parameterScheme = service(),
@@ -417,7 +415,7 @@ class DefaultInstantExecution internal constructor(
         withGradleIsolate(gradle) {
             val eventListenerRegistry = service<BuildEventListenerRegistryInternal>()
             readCollection {
-                val provider = read()!!.uncheckedCast<Provider<OperationCompletionListener>>()
+                val provider = readNonNull<Provider<OperationCompletionListener>>()
                 eventListenerRegistry.subscribe(provider)
             }
         }
@@ -486,12 +484,19 @@ class DefaultInstantExecution internal constructor(
 
     private
     val instantExecutionStateFile by lazy {
-        val currentGradleVersion = GradleVersion.current().version
-        val cacheDir = File(host.rootDir, ".instant-execution-state/$currentGradleVersion").absoluteFile
+        val cacheDir = absoluteFile(".instant-execution-state/${currentGradleVersion()}")
         val baseName = compactMD5For(host.requestedTaskNames)
         val cacheFileName = "$baseName.bin"
         File(cacheDir, cacheFileName)
     }
+
+    private
+    fun currentGradleVersion(): String =
+        GradleVersion.current().version
+
+    private
+    fun absoluteFile(path: String) =
+        File(host.rootDir, path).absoluteFile
 
     private
     val reportOutputDir by lazy {
@@ -503,12 +508,16 @@ class DefaultInstantExecution internal constructor(
     // Skip instant execution for buildSrc for now. Should instead collect up the inputs of its tasks and treat as task graph cache inputs
     private
     val isInstantExecutionEnabled: Boolean by lazy {
-        systemProperty(SystemProperties.isEnabled)?.toBoolean() ?: false && !host.currentBuild.buildSrc
+        systemProperty(SystemProperties.isEnabled)?.toBoolean() ?: false
+            && !host.currentBuild.buildSrc
     }
 
     private
     val instantExecutionLogLevel: LogLevel
-        get() = if (systemProperty(SystemProperties.isQuiet)?.toBoolean() == true) LogLevel.INFO else LogLevel.LIFECYCLE
+        get() = when (systemProperty(SystemProperties.isQuiet)?.toBoolean()) {
+            true -> LogLevel.INFO
+            else -> LogLevel.LIFECYCLE
+        }
 
     private
     fun maxProblems(): Int =

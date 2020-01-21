@@ -17,18 +17,20 @@ import org.gradle.gradlebuild.unittestandcompile.ModuleType
 
 plugins {
     `java-library`
-     gradlebuild.classycle
+    gradlebuild.`publish-public-libraries`
+    gradlebuild.classycle
 }
 
 description = "Tools to take immutable, comparable snapshots of files and other things"
 
 dependencies {
-    implementation(library("guava"))
-    implementation(library("jsr305"))
-    implementation(project(":files"))
-    implementation(project(":hashing"))
-    implementation(project(":pineapple"))
-    implementation(library("slf4j_api"))
+    api(project(":files"))
+    api(project(":hashing"))
+
+    implementation(project(":baseAnnotations"))
+
+    implementation(library("guava")) { version { require(libraryVersion("guava")) } }
+    implementation(library("slf4j_api")) { version { require(libraryVersion("slf4j_api")) } }
 
     testImplementation(project(":processServices"))
     testImplementation(project(":resources"))

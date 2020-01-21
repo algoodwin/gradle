@@ -39,8 +39,9 @@ import org.gradle.api.internal.CollectionCallbackActionDecorator
 import org.gradle.api.internal.FactoryNamedDomainObjectContainer
 import org.gradle.api.internal.GradleInternal
 import org.gradle.api.internal.ProcessOperations
+import org.gradle.api.internal.artifacts.DefaultProjectModuleFactory
 import org.gradle.api.internal.artifacts.Module
-import org.gradle.api.internal.artifacts.ProjectBackedModule
+import org.gradle.api.internal.artifacts.ProjectModuleFactory
 import org.gradle.api.internal.artifacts.configurations.DependencyMetaDataProvider
 import org.gradle.api.internal.collections.DomainObjectCollectionFactory
 import org.gradle.api.internal.file.DefaultProjectLayout
@@ -154,8 +155,9 @@ class DefaultProjectTest extends Specification {
     CrossProjectConfigurator crossProjectConfigurator = new BuildOperationCrossProjectConfigurator(buildOperationExecutor)
     ClassLoaderScope baseClassLoaderScope = new RootClassLoaderScope("root", getClass().classLoader, getClass().classLoader, new DummyClassLoaderCache(), Stub(ClassLoaderScopeRegistryListener))
     ClassLoaderScope rootProjectClassLoaderScope = baseClassLoaderScope.createChild("root-project")
-    ProjectStateRegistry projectStateRegistryMock = Stub(ProjectStateRegistry)
-    ProjectState projectStateMock = Stub(ProjectState)
+    ProjectModuleFactory moduleFactory = new DefaultProjectModuleFactory(Mock(ProjectRegistry) {
+        getAllProjects() >> []
+    })
 
     def setup() {
         rootDir = new File("/path/root").absoluteFile
@@ -225,11 +227,6 @@ class DefaultProjectTest extends Specification {
         serviceRegistryMock.get((Type) ModelRegistry) >> modelRegistry
         serviceRegistryMock.get(ModelRegistry) >> modelRegistry
 
-        serviceRegistryMock.get((Type) ProjectStateRegistry) >> projectStateRegistryMock
-        serviceRegistryMock.get(ProjectStateRegistry) >> projectStateRegistryMock
-        projectStateRegistryMock.stateFor(_) >> projectStateMock
-        projectStateMock.withMutableState(_) >> { Runnable runnable -> runnable.run() }
-
         ModelSchemaStore modelSchemaStore = Stub(ModelSchemaStore)
         serviceRegistryMock.get((Type) ModelSchemaStore) >> modelSchemaStore
         serviceRegistryMock.get(ModelSchemaStore) >> modelSchemaStore
@@ -257,7 +254,11 @@ class DefaultProjectTest extends Specification {
     }
 
     private DefaultProject defaultProject(String name, def parent, File rootDir, ClassLoaderScope scope) {
-        TestUtil.instantiatorFactory().decorateLenient().newInstance(DefaultProject, name, parent, rootDir, new File(rootDir, 'build.gradle'), script, build, this.projectServiceRegistryFactoryMock, scope, baseClassLoaderScope)
+        def container = Stub(ProjectState)
+        _ * container.identityPath >> (parent == null ? Path.ROOT : parent.identityPath.child(name))
+        _ * container.projectPath >> (parent == null ? Path.ROOT : parent.projectPath.child(name))
+        _ * container.withMutableState(_) >> { Runnable runnable -> runnable.run() }
+        TestUtil.instantiatorFactory().decorateLenient().newInstance(DefaultProject, name, parent, rootDir, new File(rootDir, 'build.gradle'), script, build, container, projectServiceRegistryFactoryMock, scope, baseClassLoaderScope)
     }
 
     Type getProjectRegistryType() {
@@ -652,6 +653,7 @@ class DefaultProjectTest extends Specification {
 
         then:
         1 * action.execute(child1)
+        0 * action._
         child1.is(child)
     }
 
@@ -955,7 +957,7 @@ def scriptMethod(Closure closure) {
 
     def getModule() {
         when:
-        Module moduleDummyResolve = new ProjectBackedModule(project)
+        Module moduleDummyResolve = moduleFactory.getModule(project)
         dependencyMetaDataProviderMock.getModule() >> moduleDummyResolve
         then:
         project.getModule() == moduleDummyResolve

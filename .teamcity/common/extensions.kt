@@ -18,17 +18,17 @@ package common
 
 import configurations.m2CleanScriptUnixLike
 import configurations.m2CleanScriptWindows
-import jetbrains.buildServer.configs.kotlin.v2018_2.AbsoluteId
-import jetbrains.buildServer.configs.kotlin.v2018_2.BuildStep
-import jetbrains.buildServer.configs.kotlin.v2018_2.BuildSteps
-import jetbrains.buildServer.configs.kotlin.v2018_2.BuildType
-import jetbrains.buildServer.configs.kotlin.v2018_2.CheckoutMode
-import jetbrains.buildServer.configs.kotlin.v2018_2.Dependencies
-import jetbrains.buildServer.configs.kotlin.v2018_2.FailureAction
-import jetbrains.buildServer.configs.kotlin.v2018_2.Requirements
-import jetbrains.buildServer.configs.kotlin.v2018_2.VcsSettings
-import jetbrains.buildServer.configs.kotlin.v2018_2.buildSteps.GradleBuildStep
-import jetbrains.buildServer.configs.kotlin.v2018_2.buildSteps.script
+import jetbrains.buildServer.configs.kotlin.v2019_2.AbsoluteId
+import jetbrains.buildServer.configs.kotlin.v2019_2.BuildStep
+import jetbrains.buildServer.configs.kotlin.v2019_2.BuildSteps
+import jetbrains.buildServer.configs.kotlin.v2019_2.BuildType
+import jetbrains.buildServer.configs.kotlin.v2019_2.CheckoutMode
+import jetbrains.buildServer.configs.kotlin.v2019_2.Dependencies
+import jetbrains.buildServer.configs.kotlin.v2019_2.FailureAction
+import jetbrains.buildServer.configs.kotlin.v2019_2.Requirements
+import jetbrains.buildServer.configs.kotlin.v2019_2.VcsSettings
+import jetbrains.buildServer.configs.kotlin.v2019_2.buildSteps.GradleBuildStep
+import jetbrains.buildServer.configs.kotlin.v2019_2.buildSteps.script
 
 fun BuildSteps.customGradle(init: GradleBuildStep.() -> Unit, custom: GradleBuildStep.() -> Unit): GradleBuildStep =
     GradleBuildStep(init)
@@ -116,7 +116,7 @@ fun buildToolGradleParameters(daemon: Boolean = true, isContinue: Boolean = true
         if (os == Os.macos) "" else "-Dorg.gradle.internal.plugins.portal.url.override=%gradle.plugins.portal.url%"
     )
 
-fun buildToolParametersString(daemon: Boolean = true) = buildToolGradleParameters(daemon).joinToString(separator = " ")
+fun buildToolParametersString(daemon: Boolean = true, os: Os = Os.linux) = buildToolGradleParameters(daemon, os = os).joinToString(separator = " ")
 
 fun Dependencies.compileAllDependency(compileAllId: String = "Gradle_Check_CompileAll") {
     // Compile All has to succeed before anything else is started
@@ -134,10 +134,10 @@ fun Dependencies.compileAllDependency(compileAllId: String = "Gradle_Check_Compi
     }
 }
 
-fun BuildSteps.verifyTestFilesCleanup(daemon: Boolean = true) {
+fun BuildSteps.verifyTestFilesCleanup(daemon: Boolean = true, os: Os = Os.linux) {
     gradleWrapper {
         name = "VERIFY_TEST_FILES_CLEANUP"
         tasks = "verifyTestFilesCleanup"
-        gradleParams = buildToolParametersString(daemon)
+        gradleParams = buildToolParametersString(daemon, os)
     }
 }

@@ -17,6 +17,7 @@
 package org.gradle.api.internal.artifacts.transform;
 
 import org.gradle.api.Action;
+import org.gradle.api.Describable;
 import org.gradle.api.Project;
 import org.gradle.api.artifacts.ResolveException;
 import org.gradle.api.internal.artifacts.ivyservice.DefaultLenientConfiguration;
@@ -66,6 +67,8 @@ public abstract class TransformationNode extends Node implements SelfExecutingNo
         this.transformListener = transformListener;
     }
 
+    public abstract ResolvableArtifact getInputArtifact();
+
     @Nullable
     @Override
     public Project getOwningProject() {
@@ -111,7 +114,6 @@ public abstract class TransformationNode extends Node implements SelfExecutingNo
     public Set<Node> getFinalizers() {
         return Collections.emptySet();
     }
-
 
     @Override
     public void prepareForExecution() {
@@ -168,7 +170,8 @@ public abstract class TransformationNode extends Node implements SelfExecutingNo
             this.artifact = artifact;
         }
 
-        public ResolvableArtifact getArtifact() {
+        @Override
+        public ResolvableArtifact getInputArtifact() {
             return artifact;
         }
 
@@ -213,6 +216,11 @@ public abstract class TransformationNode extends Node implements SelfExecutingNo
             this.previousTransformationNode = previousTransformationNode;
         }
 
+        @Override
+        public ResolvableArtifact getInputArtifact() {
+            return previousTransformationNode.getInputArtifact();
+        }
+
         public TransformationNode getPreviousTransformationNode() {
             return previousTransformationNode;
         }
@@ -229,8 +237,8 @@ public abstract class TransformationNode extends Node implements SelfExecutingNo
                 @Override
                 protected String describeSubject() {
                     return previousTransformationNode.getTransformedSubject()
-                        .map(subject -> subject.getDisplayName())
-                        .getOrMapFailure(failure -> failure.getMessage());
+                        .map(Describable::getDisplayName)
+                        .getOrMapFailure(Throwable::getMessage);
                 }
             });
         }
@@ -266,7 +274,7 @@ public abstract class TransformationNode extends Node implements SelfExecutingNo
         public Try<TransformationSubject> call(BuildOperationContext context) {
             Try<TransformationSubject> transformedSubject = transform();
             context.setResult(ExecuteScheduledTransformationStepBuildOperationType.RESULT);
-            transformedSubject.getFailure().ifPresent(failure -> context.failed(failure));
+            transformedSubject.getFailure().ifPresent(context::failed);
             return transformedSubject;
         }
 

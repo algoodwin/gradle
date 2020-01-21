@@ -16,7 +16,6 @@
 
 package org.gradle.internal.vfs.impl;
 
-import org.gradle.internal.file.FileType;
 import org.gradle.internal.vfs.WatchingVirtualFileSystem;
 import org.gradle.internal.vfs.watch.FileWatcherRegistry;
 import org.gradle.internal.vfs.watch.FileWatcherRegistryFactory;
@@ -24,28 +23,27 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
+import java.io.File;
 import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
 
 public class DefaultWatchingVirtualFileSystem extends AbstractDelegatingVirtualFileSystem implements WatchingVirtualFileSystem, Closeable {
     private static final Logger LOGGER = LoggerFactory.getLogger(DefaultWatchingVirtualFileSystem.class);
 
     private final FileWatcherRegistryFactory watcherRegistryFactory;
-    private final Predicate<Path> watchFilter;
+    private final Predicate<String> watchFilter;
 
     private FileWatcherRegistry watchRegistry;
 
     public DefaultWatchingVirtualFileSystem(
         FileWatcherRegistryFactory watcherRegistryFactory,
         AbstractVirtualFileSystem delegate,
-        Predicate<Path> watchFilter
+        Predicate<String> watchFilter
     ) {
         super(delegate);
         this.watcherRegistryFactory = watcherRegistryFactory;
@@ -53,49 +51,15 @@ public class DefaultWatchingVirtualFileSystem extends AbstractDelegatingVirtualF
     }
 
     @Override
-    public void startWatching() {
+    public void startWatching(Collection<File> mustWatchDirectories) {
         if (watchRegistry != null) {
             throw new IllegalStateException("Watch service already started");
         }
         try {
-            watchRegistry = watcherRegistryFactory.createRegistry();
-            Set<Path> visited = new HashSet<>();
-            getRoot().visitSnapshots(snapshot -> {
-                Path path = Paths.get(snapshot.getAbsolutePath());
-
-                // We don't watch things that shouldn't be watched
-                if (!watchFilter.test(path)) {
-                    return;
-                }
-
-                try {
-                    // For existing files and directories we watch the parent directory,
-                    // so we learn if the entry itself disappears or gets modified.
-                    // In case of a missing file we need to find the closest existing
-                    // ancestor to watch so we can learn if the missing file respawns.
-                    Path ancestor = path;
-                    while (true) {
-                        ancestor = ancestor.getParent();
-                        if (ancestor == null) {
-                            break;
-                        }
-                        if (Files.exists(ancestor)) {
-                            watch(ancestor, visited);
-                            break;
-                        }
-                    }
-
-                    // For directory entries we watch the directory itself,
-                    // so we learn about new children spawning. If the directory
-                    // has children, it would be watched through them already.
-                    // This is here to make sure we also watch empty directories.
-                    if (snapshot.getType() == FileType.Directory) {
-                        watch(path, visited);
-                    }
-                } catch (IOException ex) {
-                    throw new UncheckedIOException(ex);
-                }
-            });
+            long startTime = System.currentTimeMillis();
+            watchRegistry = watcherRegistryFactory.startWatching(getRoot(), watchFilter, mustWatchDirectories);
+            long endTime = System.currentTimeMillis() - startTime;
+            LOGGER.warn("Spent {} ms registering watches for file system events", endTime);
         } catch (Exception ex) {
             LOGGER.error("Couldn't create watch service, not tracking changes between builds", ex);
             invalidateAll();
@@ -103,32 +67,35 @@ public class DefaultWatchingVirtualFileSystem extends AbstractDelegatingVirtualF
         }
     }
 
-    private void watch(Path directory, Set<Path> visited) throws IOException {
-        if (!visited.add(directory)) {
-            return;
-        }
-        LOGGER.warn("Start watching {}", directory);
-        watchRegistry.registerWatchPoint(directory);
-    }
-
     @Override
     public void stopWatching() {
         if (watchRegistry == null) {
             return;
         }
+
+        AtomicInteger count = new AtomicInteger();
+        AtomicBoolean unknownEventEncountered = new AtomicBoolean();
         try {
+            long startTime = System.currentTimeMillis();
             watchRegistry.stopWatching(new FileWatcherRegistry.ChangeHandler() {
                 @Override
                 public void handleChange(FileWatcherRegistry.Type type, Path path) {
-                    update(Collections.singleton(path.toString()), () -> {
-                    });
+                    count.incrementAndGet();
+                    LOGGER.debug("Handling VFS change {} {}", type, path);
+                    update(Collections.singleton(path.toString()), () -> {});
                 }
 
                 @Override
-                public void handleOverflow() {
+                public void handleLostState() {
+                    unknownEventEncountered.set(true);
+                    LOGGER.warn("Dropped VFS state due to lost state");
                     invalidateAll();
                 }
             });
+            if (!unknownEventEncountered.get()) {
+                LOGGER.warn("Received {} file system events since last build", count);
+            }
+            LOGGER.warn("Spent {} ms processing file system events since last build", System.currentTimeMillis() - startTime);
         } catch (IOException ex) {
             LOGGER.error("Couldn't fetch file changes, dropping VFS state", ex);
             invalidateAll();

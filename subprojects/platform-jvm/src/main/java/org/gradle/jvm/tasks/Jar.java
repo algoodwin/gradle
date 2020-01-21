@@ -16,6 +16,7 @@
 
 package org.gradle.jvm.tasks;
 
+import com.google.common.collect.ImmutableList;
 import groovy.lang.Closure;
 import org.gradle.api.Action;
 import org.gradle.api.InvalidUserDataException;
@@ -31,10 +32,10 @@ import org.gradle.api.java.archives.internal.ManifestInternal;
 import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.Internal;
 import org.gradle.api.tasks.bundling.Zip;
+import org.gradle.internal.execution.OutputChangeListener;
 import org.gradle.util.ConfigureUtil;
 
 import java.nio.charset.Charset;
-import java.util.concurrent.Callable;
 
 /**
  * Assembles a JAR archive.
@@ -53,23 +54,25 @@ public class Jar extends Zip {
         manifest = new DefaultManifest(getFileResolver());
         // Add these as separate specs, so they are not affected by the changes to the main spec
         metaInf = (CopySpecInternal) getRootSpec().addFirst().into("META-INF");
-        metaInf.addChild().from((Callable<FileTreeAdapter>) () -> {
-            GeneratedSingletonFileTree manifestSource = new GeneratedSingletonFileTree(getTemporaryDirFactory(), "MANIFEST.MF", outputStream -> {
-                Manifest manifest = getManifest();
-                if (manifest == null) {
-                    manifest = new DefaultManifest(null);
+        OutputChangeListener outputChangeListener = getServices().get(OutputChangeListener.class);
+        metaInf.addChild().from(new FileTreeAdapter(new GeneratedSingletonFileTree(
+            getTemporaryDirFactory(),
+            "MANIFEST.MF",
+            absolutePath -> outputChangeListener.beforeOutputChange(ImmutableList.of(absolutePath)),
+            outputStream -> {
+                Manifest manifest1 = getManifest();
+                if (manifest1 == null) {
+                    manifest1 = new DefaultManifest(null);
                 }
                 ManifestInternal manifestInternal;
-                if (manifest instanceof ManifestInternal) {
-                    manifestInternal = (ManifestInternal) manifest;
+                if (manifest1 instanceof ManifestInternal) {
+                    manifestInternal = (ManifestInternal) manifest1;
                 } else {
-                    manifestInternal = new CustomManifestInternalWrapper(manifest);
+                    manifestInternal = new CustomManifestInternalWrapper(manifest1);
                 }
                 manifestInternal.setContentCharset(manifestContentCharset);
                 manifestInternal.writeTo(outputStream);
-            });
-            return new FileTreeAdapter(manifestSource);
-        });
+            })));
         getMainSpec().appendCachingSafeCopyAction(details -> {
             if (details.getPath().equalsIgnoreCase("META-INF/MANIFEST.MF")) {
                 details.exclude();

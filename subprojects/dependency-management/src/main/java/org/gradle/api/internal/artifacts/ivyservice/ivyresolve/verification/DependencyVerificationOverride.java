@@ -16,22 +16,26 @@
 package org.gradle.api.internal.artifacts.ivyservice.ivyresolve.verification;
 
 import org.gradle.api.artifacts.result.ResolvedArtifactResult;
+import org.gradle.api.internal.artifacts.configurations.ResolutionStrategyInternal;
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ModuleComponentRepository;
 import org.gradle.api.invocation.Gradle;
 
 import java.io.File;
 
 public interface DependencyVerificationOverride {
-    DependencyVerificationOverride NO_VERIFICATION = new DependencyVerificationOverride() {
-        @Override
-        public ModuleComponentRepository overrideDependencyVerification(ModuleComponentRepository original) {
-            return original;
-        }
-    };
+    DependencyVerificationOverride NO_VERIFICATION = (original, resolveContextName, resolutionStrategy) -> original;
+    String VERIFICATION_METADATA_XML = "verification-metadata.xml";
+    String VERIFICATION_KEYRING_GPG = "verification-keyring.gpg";
+    String VERIFICATION_KEYRING_DRYRUN_GPG = "verification-keyring-dryrun.gpg";
 
     static File dependencyVerificationsFile(File buildDirectory) {
         File gradleDir = ensureGradleDirExists(buildDirectory);
-        return new File(gradleDir, "verification-metadata.xml");
+        return new File(gradleDir, VERIFICATION_METADATA_XML);
+    }
+
+    static File keyringsFile(File buildDirectory) {
+        File gradleDir = ensureGradleDirExists(buildDirectory);
+        return new File(gradleDir, VERIFICATION_KEYRING_GPG);
     }
 
     static File ensureGradleDirExists(File buildDirectory) {
@@ -42,7 +46,7 @@ public interface DependencyVerificationOverride {
         return gradleDir;
     }
 
-    ModuleComponentRepository overrideDependencyVerification(ModuleComponentRepository original);
+    ModuleComponentRepository overrideDependencyVerification(ModuleComponentRepository original, String resolveContextName, ResolutionStrategyInternal resolutionStrategy);
 
     default void buildFinished(Gradle gradle) {
 
