@@ -1700,7 +1700,7 @@ abstract class PropertySpec<T> extends ProviderSpec<T> {
     }
 
     ProviderInternal<T> broken() {
-        return new AbstractReadOnlyProvider<T>() {
+        return new AbstractMinimalProvider<T>() {
             @Override
             Class<T> getType() {
                 return PropertySpec.this.type()
@@ -1728,7 +1728,7 @@ abstract class PropertySpec<T> extends ProviderSpec<T> {
         return new TestProvider<T>(type(), [], producer)
     }
 
-    class TestProvider<T> extends AbstractReadOnlyProvider<T> {
+    class TestProvider<T> extends AbstractMinimalProvider<T> {
         final Class<T> type
         final Iterator<T> values
         final Object producer

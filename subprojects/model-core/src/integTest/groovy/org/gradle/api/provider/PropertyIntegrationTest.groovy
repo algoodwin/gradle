@@ -136,7 +136,29 @@ task thing(type: SomeTask) {
     }
 
     def "fails when property with no value is queried"() {
-        expect: false
+        given:
+        buildFile << """
+            abstract class SomeTask extends DefaultTask {
+                @Internal
+                abstract Property<String> getProp()
+
+                @TaskAction
+                def go() {
+                    prop.get()
+                }
+            }
+
+            tasks.register('thing', SomeTask) {
+                prop
+            }
+        """
+
+        when:
+        fails("thing")
+
+        then:
+        failure.assertHasDescription("Execution failed for task ':thing'.")
+        failure.assertHasCause("Cannot query the value of task ':thing' property 'prop' because it has no value.")
     }
 
     def "fails when property with no value because source property has no value is queried"() {
@@ -170,8 +192,11 @@ task thing(type: SomeTask) {
         fails("thing")
 
         then:
-        failure.assertHasDescription("??")
-        failure.assertHasCause("??")
+        failure.assertHasDescription("Execution failed for task ':thing'.")
+        failure.assertHasCause("""Cannot query the value of task ':thing' property 'prop' because it has no value.
+The value of this property is derived from:
+  - extension 'custom2' property 'source'
+  - extension 'custom1' property 'source'""")
     }
 
     def "can finalize the value of a property using API"() {

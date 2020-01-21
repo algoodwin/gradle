@@ -113,7 +113,7 @@ class AbstractProviderTest extends ProviderSpec<String> {
         e.message == 'No value has been specified for this provider.'
     }
 
-    static class TestProvider extends AbstractReadOnlyProvider {
+    static class TestProvider extends AbstractMinimalProvider {
         String value
 
         void value(String s) {
